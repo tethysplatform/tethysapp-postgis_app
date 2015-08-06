@@ -1,0 +1,12 @@
+{% extends "postgis_app/base.html" %}
+
+{% load tethys_gizmos %}
+
+{% block app_content %}
+  <h1>Flooded Addresses for Scenario {{ id }}</h1>
+  <ul>
+  	{% for address in flooded_addresses %}
+  		<li>{{ address.full_address }}, {{ address.city }}, {{ address.state }}</li>
+  	{% endfor %}
+  </ul>
+{% endblock %}

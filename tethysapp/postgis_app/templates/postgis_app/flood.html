@@ -1,0 +1,14 @@
+{% extends "postgis_app/base.html" %}
+
+{% load tethys_gizmos %}
+
+{% block app_content %}
+  <h1>Flood Maps</h1>
+  {% gizmo map_view map_options %}
+{% endblock %}
+
+{% block app_actions %}
+	{% if id %}
+		<a class="btn btn-default" href="{% url 'postgis_app:list' id %}">Flooded Address List</a>
+	{% endif %}
+{% endblock %}

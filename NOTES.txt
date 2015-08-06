@@ -1,0 +1,633 @@
+NFIE TRAINING - PostGIS Databases and Geoprocessing
+
+Using Two Tethys APIS Today:
+
+Persistent Store API
+Spatial Persistent Store API
+Template Gizmos API
+
+3rd-Party Python Modules:
+
+SQLAlchemy
+http://www.sqlalchemy.org/
+http://docs.sqlalchemy.org/en/rel_1_0/core/types.html
+
+GeoAlchemy 2
+https://geoalchemy-2.readthedocs.org/en/latest/
+https://geoalchemy-2.readthedocs.org/en/latest/spatial_functions.html#spatial-functions
+
+Other:
+
+PostGIS
+http://postgis.net/
+http://postgis.net/docs/manual-2.1/reference.html
+http://postgis.net/docs/manual-2.1/RT_reference.html
+
+Spatial Reference IDS
+http://spatialreference.org
+http://spatialreference.org/ref/epsg/4326/
+
+#### 1. Create a new app
+
+a. Create a new app using the following command:
+
+        $ . t
+(tethys)$ cd ~/tethysdev
+(tethys)$ tethys scaffold postgis_app
+
+c. Install the app for development:
+
+(tethys)$ cd tethysapp-postgis_app
+(tethys)$ python setup.py develop
+
+d. Start the development server again and browse to the new app:
+
+(tethys)$ tethys manage start
+
+e. Open the new app project in Sublime using File > Open Folder..., select the "tethysapp-postgis_app", and press "Open".
+
+###### 2. Create a New Directory in the app project directory (i.e.: postgis_app) called "data" and copy the CSV files into it.
+
+STEPS:
+
+1. Register Persistent Store
+2. Define Data Model (like a blueprint for the database)
+3. Write a Function that Creates the Tables and Initializes them with Data
+4. Execute syncstores Command to Create Database
+
+########### REGISTER THE PERSISTENT STORE, DEFINE MODEL FOR ADDRESS POINTS, AND INITIALIZE THE DATABASE ##############
+
+### app.py
+
+from tethys_apps.base import PersistentStore
+
+class PostgisApp(TethysAppBase):
+
+	...
+
+    def persistent_stores(self):
+        """
+        Add one or more persistent_stores.
+        """
+        stores = (PersistentStore(name='flooded_addresses',
+                                  initializer='init_stores:init_flooded_addresses_db',
+                                  spatial=True
+                  ),
+        )
+
+        return stores
+
+### model.py
+
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import sessionmaker
+from geoalchemy2 import Geometry
+
+from .utilities import get_persistent_store_engine
+
+engine = get_persistent_store_engine('flooded_addresses')
+SessionMaker = sessionmaker(bind=engine)
+
+Base = declarative_base()
+
+
+class AddressPoint(Base):
+    """
+    SQLAlchemy table definition for storing address points.
+    """
+    __tablename__ = 'address_points'
+
+    # Columns
+    id = Column(Integer, primary_key=True)
+    full_address = Column(String)
+    city = Column(String)
+    state = Column(String)
+    zip_code = Column(String)
+    geometry = Column(Geometry('POINT'))
+
+    def __init__(self, x, y, full_address, city, state, zip_code):
+        """
+        Constructor
+        """
+        self.full_address = full_address
+        self.city = city
+        self.state = state
+        self.zip_code = zip_code
+        self.geometry = 'SRID=4326;POINT({0} {1})'.format(x, y)
+
+### init_stores.py
+
+import os
+
+from .model import engine, SessionMaker, Base, AddressPoint
+
+
+def init_flooded_addresses_db(first_time):
+    """
+    Initialize the flooded addresses database.
+    """
+    # STEP 1: Create database tables
+    Base.metadata.create_all(engine)
+
+    # STEP 2: Add data to the database
+    if first_time:
+        postgis_app_dir = os.path.dirname(__file__)
+        address_points_path = os.path.join(postgis_app_dir, 'data', 'provo_address_points.csv')
+        address_points_lines = []
+
+        with open(address_points_path, 'r') as f:
+            address_points_lines = f.read().splitlines()
+
+        address_points_lines.pop(0)
+        
+        session = SessionMaker()
+
+        for line in address_points_lines:
+            row = line.split(',')
+
+            address_point = AddressPoint(x=row[0],
+                                         y=row[1],
+                                         full_address=row[4],
+                                         city=row[15],
+                                         state=row[18],
+                                         zip_code=row[16]
+            )
+
+            session.add(address_point)
+            
+        session.commit()
+        session.close()
+
+
+!!!!!!!!!!!!!!!!!!! RUN SYNCSTORES: $ tethys syncstores postgis_app !!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!! CONCEPT: CONNECT TO THE DATABASE AND POINT OUT THE RESULT OF OUR INITIALIZATION !!!!!!!!!!!!!!!
+
+################# CREATE A MAP ON THE HOME PAGE ZOOMED TO PROVO ####################
+
+### controllers.py
+
+from tethys_apps.sdk.gizmos import *
+
+
+def home(request):
+    """
+    Controller for the app home page.
+    """
+
+    initial_view = MVView(
+        projection='EPSG:4326',
+        center=[-111.6608, 40.2444],
+        zoom=12
+    )
+
+    map_options = MapView(
+        height = '600px',
+        width = '100%',
+        layers = [],
+        basemap='OpenStreetMap',
+        view=initial_view,
+        legend=True
+    )
+    
+    context = {'map_options': map_options}
+
+    return render(request, 'postgis_app/home.html', context)
+
+### home.html
+
+{% extends "postgis_app/base.html" %}
+
+{% load tethys_gizmos %}
+
+{% block app_content %}
+  <h1>Provo Addresses</h1>
+  {% gizmo map_view map_options %}
+{% endblock %}
+
+
+##################### DISPLAY THE ADDRESS POINTS ON THE MAP ######################
+
+### controllers.py
+
+import json
+
+from .model import SessionMaker, AddressPoint
+
+
+def home(request):
+    """
+    Controller for the app home page.
+    """
+    session = SessionMaker()
+    address_points = session.query(AddressPoint.geometry.ST_AsGeoJSON()).all()
+
+    features = []
+
+    for address_point in address_points:
+        address_point_feature = {
+            'type': 'Feature',
+            'geometry': json.loads(address_point[0])
+        }
+
+        features.append(address_point_feature)
+
+    geojson_address_points = {
+        'type': 'FeatureCollection',
+        'crs': {
+            'type': 'name',
+            'properties': {
+                'name': 'EPSG:4326'
+            }
+        },
+        'features': features
+    }
+
+    address_points_layer = MVLayer(
+        source='GeoJSON',
+        options=geojson_address_points,
+        legend_title='Address Points',
+        legend_extent=[-111.74, 40.20, -111.61, 40.33],
+    )
+
+    ...
+
+    map_options = MapView(
+        height = '600px',
+        width = '100%',
+        layers = [address_points_layer],
+        basemap='OpenStreetMap',
+        view=initial_view,
+        legend=True
+    )
+    
+    context = {'map_options': map_options}
+
+    session.close()
+
+    return render(request, 'postgis_app/home.html', context)
+
+######################## CREATE NEW MODEL FOR FLOOD EXTENT AND A PAGE TO VIEW ALL OF THEM ########################
+
+### model.py
+
+...
+
+class FloodExtent(Base):
+    """
+    SQLAlchemy table definition for storing flood extent polygons.
+    """
+    __tablename__ = 'flood_extents'
+
+    # Columns
+    id = Column(Integer, primary_key=True)
+    geometry = Column(Geometry('POLYGON'))
+    map_id = Column(Integer)
+
+    def __init__(self, wkt, map_id):
+        """
+        Constructor
+        """
+        self.geometry = 'SRID=4326;{0}'.format(wkt)
+        self.map_id = map_id
+
+
+### init_stores.py
+
+from .model import engine, SessionMaker, Base, AddressPoint, FloodExtent
+
+
+def init_flooded_addresses_db(first_time):
+    """
+    Initialize the flooded addresses database.
+    """
+    ...
+    if first_time:
+        ...
+
+        flood_extents_path = os.path.join(postgis_app_dir, 'data', 'flood_extents.txt')
+        flood_extents_lines = []
+
+        with open(flood_extents_path, 'r') as f:
+            flood_extents_lines = f.read().splitlines()
+
+        flood_extents_lines.pop(0)
+
+        for line in flood_extents_lines:
+            row = line.split('\t')
+
+            flood_extent = FloodExtent(wkt=row[0].strip('"'),
+                                       map_id=row[2]
+            )
+
+            session.add(flood_extent)
+
+        session.commit()
+        session.close()
+
+!!!!!!!!!!!!!!! RUN SYNCSTORES WITH REFRESH OPTION: tethys syncstores postgis_app --refresh !!!!!!!!!!!!!!!!!
+
+### flood.html
+
+{% extends "postgis_app/base.html" %}
+
+{% load tethys_gizmos %}
+
+{% block app_content %}
+  <h1>Flood Maps</h1>
+  {% gizmo map_view map_options %}
+{% endblock %}
+
+
+### controllers.py
+
+def flood(request):
+    """
+    Controller for flood page
+    """
+
+    initial_view = MVView(
+        projection='EPSG:4326',
+        center=[-111.6608, 40.2444],
+        zoom=12
+    )
+
+    map_options = MapView(
+        height = '600px',
+        width = '100%',
+        controls=[{'MousePosition': {'projection': 'EPSG:4326'}}],
+        layers = [],
+        basemap='OpenStreetMap',
+        view=initial_view,
+        legend=True
+    )
+
+    context = {'map_options': map_options}
+
+    return render(request, 'postgis_app/flood.html', context)
+
+### app.py
+
+                    UrlMap(name='flood',
+                           url='postgis-app/flood',
+                           controller='postgis_app.controllers.flood'),
+
+### base.html
+
+{% block app_navigation_items %}
+  <li class="title">App Navigation</li>
+  <li><a href="{% url 'postgis_app:home' %}">Provo Adresses</a></li>
+  <li><a href="{% url 'postgis_app:flood' %}">Flood Maps</a></li>
+{% endblock %}
+
+
+### controllers.py
+
+from .model import SessionMaker, AddressPoint, FloodExtent
+
+def flood(request):
+    """
+    Controller for flood page
+    """
+    session = SessionMaker()
+    flood_extents = session.query(FloodExtent.geometry.ST_AsGeoJSON(), FloodExtent.map_id).all()
+
+    layers = []
+
+    for flood_extent in flood_extents:
+        flood_extent_feature = {
+            'type': 'Feature',
+            'geometry': json.loads(flood_extent[0])
+        }
+
+        geojson_flood_extent = {
+            'type': 'FeatureCollection',
+            'crs': {
+                'type': 'name',
+                'properties': {
+                    'name': 'EPSG:4326'
+                }
+            },
+            'features': [flood_extent_feature]
+        }
+
+        flood_extent_layer = MVLayer(
+            source='GeoJSON',
+            options=geojson_flood_extent,
+            legend_title='FloodExtent {0}'.format(flood_extent.map_id),
+            legend_extent=[-111.74, 40.21, -111.61, 40.27],
+        )
+
+        layers.append(flood_extent_layer)
+
+    initial_view = MVView(
+        projection='EPSG:4326',
+        center=[-111.6608, 40.2444],
+        zoom=12
+    )
+
+    map_options = MapView(
+        height = '600px',
+        width = '100%',
+        controls=[{'MousePosition': {'projection': 'EPSG:4326'}}],
+        layers = layers,
+        basemap='OpenStreetMap',
+        view=initial_view,
+        legend=True
+    )
+
+    context = {'map_options': map_options}
+
+    session.close()
+
+    return render(request, 'postgis_app/flood.html', context)
+
+
+##################### CREATE NEW PAGE THAT SHOWS ONLY ONE FLOOD EXTENT AND FLOODED ADDRESSES ####################
+
+### app.py
+
+                    UrlMap(name='flooded_addresses',
+                           url='postgis-app/flooded-addresses/{id}',
+                           controller='postgis_app.controllers.flooded_addresses'),
+
+### controllers.py
+
+def flooded_addresses(request, id):
+    """
+    Controller for flooded address page
+    """
+    session = SessionMaker()
+    flood_extent = session.query(FloodExtent.geometry.ST_AsGeoJSON(), FloodExtent.map_id).\
+                           filter(FloodExtent.id == int(id)).\
+                           one()
+
+    flood_extent_feature = {
+        'type': 'Feature',
+        'geometry': json.loads(flood_extent[0])
+    }
+
+    geojson_flood_extent = {
+        'type': 'FeatureCollection',
+        'crs': {
+            'type': 'name',
+            'properties': {
+                'name': 'EPSG:4326'
+            }
+        },
+        'features': [flood_extent_feature]
+    }
+
+    flood_extent_layer = MVLayer(
+        source='GeoJSON',
+        options=geojson_flood_extent,
+        legend_title='FloodExtent {0}'.format(flood_extent.map_id),
+        legend_extent=[-111.74, 40.21, -111.61, 40.27],
+    )
+
+    flood_extent_as_wkt = session.query(FloodExtent.geometry.ST_AsText()).\
+                                        filter(FloodExtent.id == int(id)).\
+                                        one()
+
+    wkt = 'SRID=4326;{0}'.format(flood_extent_as_wkt[0])
+    
+    flooded_addresses = session.query(AddressPoint.geometry.ST_AsGeoJSON()).\
+                                filter(AddressPoint.geometry.ST_Intersects(wkt)).\
+                                all()
+
+    features = []
+
+    for address_point in flooded_addresses:
+        address_point_feature = {
+            'type': 'Feature',
+            'geometry': json.loads(address_point[0])
+        }
+
+        features.append(address_point_feature)
+
+    geojson_address_points = {
+        'type': 'FeatureCollection',
+        'crs': {
+            'type': 'name',
+            'properties': {
+                'name': 'EPSG:4326'
+            }
+        },
+        'features': features
+    }
+
+    flooded_addresses_layer = MVLayer(
+        source='GeoJSON',
+        options=geojson_address_points,
+        legend_title='Flooded Addresses',
+        legend_extent=[-111.74, 40.20, -111.61, 40.33],
+    )
+
+    initial_view = MVView(
+        projection='EPSG:4326',
+        center=[-111.6608, 40.2444],
+        zoom=12
+    )
+
+    map_options = MapView(
+        height = '600px',
+        width = '100%',
+        layers = [flooded_addresses_layer, flood_extent_layer],
+        basemap='OpenStreetMap',
+        view=initial_view,
+        legend=True
+    )
+
+    context = {'map_options': map_options}
+
+    session.close()
+
+    return render(request, 'postgis_app/flood.html', context)
+
+### base.html
+
+{% block app_navigation_items %}
+  ...
+  <li class="title">Flood Scenarios</li>
+  <li><a href="{% url 'postgis_app:flooded_addresses' 1 %}">Scenario 1</a></li>
+  <li><a href="{% url 'postgis_app:flooded_addresses' 2 %}">Scenario 2</a></li>
+  <li><a href="{% url 'postgis_app:flooded_addresses' 3 %}">Scenario 3</a></li>
+  <li><a href="{% url 'postgis_app:flooded_addresses' 4 %}">Scenario 4</a></li>
+  <li><a href="{% url 'postgis_app:flooded_addresses' 5 %}">Scenario 5</a></li>
+  <li><a href="{% url 'postgis_app:flooded_addresses' 6 %}">Scenario 6</a></li>
+{% endblock %}
+
+################# ADD A PAGE THAT LISTS THE ADDRESSES #########################
+
+### app.py
+
+                    UrlMap(name='list',
+                           url='postgis-app/flooded-addresses/{id}/list',
+                           controller='postgis_app.controllers.list'),
+
+
+### controllers.py
+
+def flooded_addresses(request, id):
+    ...
+    context = {'map_options': map_options,
+                'id': id}
+    ...
+
+def list(request, id):
+    """
+    Controller for listing flooded Addresses
+    """
+    session = SessionMaker()
+
+    flood_extent_as_wkt = session.query(FloodExtent.geometry.ST_AsText()).\
+                                        filter(FloodExtent.id == int(id)).\
+                                        one()
+
+    wkt = 'SRID=4326;{0}'.format(flood_extent_as_wkt[0])
+    
+    flooded_addresses = session.query(AddressPoint).\
+                                filter(AddressPoint.geometry.ST_Intersects(wkt)).\
+                                all()
+
+    context = {'flooded_addresses': flooded_addresses, 
+               'id': id}
+
+    session.close()
+
+    return render(request, 'postgis_app/list.html', context)
+
+### list.html
+
+{% extends "postgis_app/base.html" %}
+
+{% load tethys_gizmos %}
+
+{% block app_content %}
+  <h1>Flooded Addresses for Scenario {{ id }}</h1>
+  <ul>
+    {% for address in flooded_addresses %}
+        <li>{{ address.full_address }}, {{ address.city }}, {{ address.state }}</li>
+    {% endfor %}
+  </ul>
+{% endblock %}
+
+### flood.html
+
+{% block app_actions %}
+    {% if id %}
+        <a class="btn btn-default" href="{% url 'postgis_app:list' id %}">Flooded Address List</a>
+    {% endif %}
+{% endblock %}
+
+
+
+
+
+
+
+
+
+
+
