@@ -3,9 +3,9 @@ from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import sessionmaker
 from geoalchemy2 import Geometry
 
-from .utilities import get_persistent_store_engine
+from tethysapp.postgis_app.app import PostgisApp
 
-engine = get_persistent_store_engine('flooded_addresses')
+engine = PostgisApp.get_persistent_store_engine('flooded_addresses')
 SessionMaker = sessionmaker(bind=engine)
 
 Base = declarative_base()

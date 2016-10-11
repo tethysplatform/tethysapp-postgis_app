@@ -2,7 +2,7 @@ import json
 
 from django.shortcuts import render
 
-from tethys_apps.sdk.gizmos import *
+from tethys_sdk.gizmos import *
 
 from .model import SessionMaker, AddressPoint, FloodExtent
 

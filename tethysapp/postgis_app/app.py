@@ -1,5 +1,5 @@
-from tethys_apps.base import TethysAppBase, url_map_maker
-from tethys_apps.base import PersistentStore
+from tethys_sdk.base import TethysAppBase, url_map_maker
+from tethys_sdk.stores import PersistentStore
 
 class PostgisApp(TethysAppBase):
     """
@@ -12,6 +12,9 @@ class PostgisApp(TethysAppBase):
     package = 'postgis_app'
     root_url = 'postgis-app'
     color = '#e74c3c'
+    enable_feedback = False
+    feedback_emails = []
+    tags = []
         
     def url_maps(self):
         """
@@ -19,18 +22,19 @@ class PostgisApp(TethysAppBase):
         """
         UrlMap = url_map_maker(self.root_url)
 
-        url_maps = (UrlMap(name='home',
-                           url='postgis-app',
-                           controller='postgis_app.controllers.home'),
-                    UrlMap(name='flood',
-                           url='postgis-app/flood',
-                           controller='postgis_app.controllers.flood'),
-                    UrlMap(name='flooded_addresses',
-                           url='postgis-app/flooded-addresses/{id}',
-                           controller='postgis_app.controllers.flooded_addresses'),
-                    UrlMap(name='list',
-                           url='postgis-app/flooded-addresses/{id}/list',
-                           controller='postgis_app.controllers.list'),
+        url_maps = (
+            UrlMap(name='home',
+                   url='postgis-app',
+                   controller='postgis_app.controllers.home'),
+            UrlMap(name='flood',
+                   url='postgis-app/flood',
+                   controller='postgis_app.controllers.flood'),
+            UrlMap(name='flooded_addresses',
+                   url='postgis-app/flooded-addresses/{id}',
+                   controller='postgis_app.controllers.flooded_addresses'),
+            UrlMap(name='list',
+                   url='postgis-app/flooded-addresses/{id}/list',
+                   controller='postgis_app.controllers.list'),
         )
 
         return url_maps
@@ -40,10 +44,12 @@ class PostgisApp(TethysAppBase):
         Add one or more persistent_stores.
         """
         # Create a new persistent store (database)
-        stores = (PersistentStore(name='flooded_addresses',
-                                  initializer='init_stores:init_flooded_addresses_db',
-                                  spatial=True
-                  ),
+        stores = (
+            PersistentStore(
+                name='flooded_addresses',
+                initializer='postgis_app.init_stores.init_flooded_addresses_db',
+                spatial=True
+            ),
         )
 
         return stores
