@@ -1,10 +1,9 @@
 import json
-
 from django.shortcuts import render
-
 from tethys_sdk.gizmos import *
+from .model import AddressPoint, FloodExtent
 
-from .model import SessionMaker, AddressPoint, FloodExtent
+from tethysapp.postgis_app.app import PostgisApp as app
 
 
 def home(request):
@@ -12,7 +11,8 @@ def home(request):
     Controller for the app home page.
     """
     # Create a session in preparation for working with the database
-    session = SessionMaker()
+    Session = app.get_persistent_store_database('flooded_addresses', as_sessionmaker=True)
+    session = Session()
 
     # Query the database for all the address points
     # Convert to GeoJSON format on the fly
@@ -57,10 +57,10 @@ def home(request):
 
     # Define the map
     map_options = MapView(
-        height = '600px',
-        width = '100%',
+        height='100%',
+        width='100%',
         controls=[{'MousePosition': {'projection': 'EPSG:4326'}}],
-        layers = [address_points_layer],
+        layers=[address_points_layer],
         basemap='OpenStreetMap',
         view=initial_view,
         legend=True
@@ -79,7 +79,8 @@ def flood(request):
     Controller for flood page
     """
     # Create a session in preparation for working with the database
-    session = SessionMaker()
+    Session = app.get_persistent_store_database('flooded_addresses', as_sessionmaker=True)
+    session = Session()
 
     # Query for all the flood extents
     # Convert to GeoJSON on the fly
@@ -123,10 +124,10 @@ def flood(request):
 
     # Define the map
     map_options = MapView(
-        height = '600px',
-        width = '100%',
+        height='100%',
+        width='100%',
         controls=[{'MousePosition': {'projection': 'EPSG:4326'}}],
-        layers = layers,
+        layers=layers,
         basemap='OpenStreetMap',
         view=initial_view,
         legend=True
@@ -140,18 +141,19 @@ def flood(request):
     return render(request, 'postgis_app/flood.html', context)
 
 
-def flooded_addresses(request, id):
+def flooded_addresses(request, url_id):
     """
     Controller for flooded address page
     """
     # Create a session in preparation for working with the database
-    session = SessionMaker()
+    Session = app.get_persistent_store_database('flooded_addresses', as_sessionmaker=True)
+    session = Session()
 
     # Query for a single Flood Extent by id
     # Convert to GeoJSON on the fly
-    flood_extent = session.query(FloodExtent.geometry.ST_AsGeoJSON(), FloodExtent.map_id).\
-                           filter(FloodExtent.id == int(id)).\
-                           one()
+    flood_extent = session.query(FloodExtent.geometry.ST_AsGeoJSON(), FloodExtent.map_id). \
+        filter(FloodExtent.id == int(url_id)). \
+        one()
 
     # Create a GeoJSON feature collection for the flood extent
     flood_extent_feature = {
@@ -179,20 +181,20 @@ def flooded_addresses(request, id):
     )
 
     # Query for address points that fall within (intersect) the flood extent
-    flood_extent_as_wkt = session.query(FloodExtent.geometry.ST_AsText()).\
-                                        filter(FloodExtent.id == int(id)).\
-                                        one()
+    flood_extent_as_wkt = session.query(FloodExtent.geometry.ST_AsText()). \
+        filter(FloodExtent.id == int(url_id)). \
+        one()
 
     wkt = 'SRID=4326;{0}'.format(flood_extent_as_wkt[0])
-    
-    flooded_addresses = session.query(AddressPoint.geometry.ST_AsGeoJSON()).\
-                                filter(AddressPoint.geometry.ST_Intersects(wkt)).\
-                                all()
+
+    flooded_addresses_query = session.query(AddressPoint.geometry.ST_AsGeoJSON()). \
+        filter(AddressPoint.geometry.ST_Intersects(wkt)). \
+        all()
 
     # Create a GeoJSON feature collection of the address points
     features = []
 
-    for address_point in flooded_addresses:
+    for address_point in flooded_addresses_query:
         address_point_feature = {
             'type': 'Feature',
             'geometry': json.loads(address_point[0])
@@ -228,16 +230,18 @@ def flooded_addresses(request, id):
 
     # Define the map
     map_options = MapView(
-        height = '600px',
-        width = '100%',
-        layers = [flooded_addresses_layer, flood_extent_layer],
+        height='100%',
+        width='100%',
+        layers=[flooded_addresses_layer, flood_extent_layer],
         basemap='OpenStreetMap',
         view=initial_view,
         legend=True
     )
 
-    context = {'map_options': map_options,
-                'id': id}
+    context = {
+        'map_options': map_options,
+        'id': url_id
+    }
     
     # Close the session to prevent problems with the database          
     session.close()
@@ -245,26 +249,29 @@ def flooded_addresses(request, id):
     return render(request, 'postgis_app/flood.html', context)
 
 
-def list(request, id):
+def list_flooded_addresses(request, url_id):
     """
     Controller for listing flooded Addresses
     """
     # Create a session in preparation for working with the database
-    session = SessionMaker()
+    Session = app.get_persistent_store_database('flooded_addresses', as_sessionmaker=True)
+    session = Session()
 
     # Query the database for address points that fall within the flood extent
-    flood_extent_as_wkt = session.query(FloodExtent.geometry.ST_AsText()).\
-                                        filter(FloodExtent.id == int(id)).\
-                                        one()
+    flood_extent_as_wkt = session.query(FloodExtent.geometry.ST_AsText()). \
+        filter(FloodExtent.id == int(url_id)). \
+        one()
 
     wkt = 'SRID=4326;{0}'.format(flood_extent_as_wkt[0])
-    
-    flooded_addresses = session.query(AddressPoint).\
-                                filter(AddressPoint.geometry.ST_Intersects(wkt)).\
-                                all()
 
-    context = {'flooded_addresses': flooded_addresses, 
-               'id': id}
+    flooded_addresses_query = session.query(AddressPoint). \
+        filter(AddressPoint.geometry.ST_Intersects(wkt)). \
+        all()
+
+    context = {
+        'flooded_addresses': flooded_addresses_query,
+        'id': url_id
+    }
 
     # Close the session to prevent problems with the database
     session.close()

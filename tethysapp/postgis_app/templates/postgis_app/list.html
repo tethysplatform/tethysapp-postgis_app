@@ -3,10 +3,10 @@
 {% load tethys_gizmos %}
 
 {% block app_content %}
-  <h1>Flooded Addresses for Scenario {{ id }}</h1>
-  <ul>
+  <h1 style="padding-left:15px;">Flooded Addresses for Scenario {{ id }}</h1>
+  <ul class="list-group">
   	{% for address in flooded_addresses %}
-  		<li>{{ address.full_address }}, {{ address.city }}, {{ address.state }}</li>
+  		<li class="list-group-item">{{ address.full_address }}, {{ address.city }}, {{ address.state }}</li>
   	{% endfor %}
   </ul>
 {% endblock %}
