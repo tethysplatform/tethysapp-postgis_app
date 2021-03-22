@@ -18,16 +18,25 @@
 {% block app_title %}{{ tethys_app.name }}{% endblock %}
 
 {% block app_navigation_items %}
+  {% url 'postgis_app:home' as home_url %}
+  {% url 'postgis_app:flood' as flood_url %}
+  {% url 'postgis_app:flooded_addresses' 1 as flooded_sc1 %}
+  {% url 'postgis_app:flooded_addresses' 2 as flooded_sc2 %}
+  {% url 'postgis_app:flooded_addresses' 3 as flooded_sc3 %}
+  {% url 'postgis_app:flooded_addresses' 4 as flooded_sc4 %}
+  {% url 'postgis_app:flooded_addresses' 5 as flooded_sc5 %}
+  {% url 'postgis_app:flooded_addresses' 6 as flooded_sc6 %}
+
   <li class="title">App Navigation</li>
-  <li><a href="{% url 'postgis_app:home' %}">Provo Adresses</a></li>
-  <li><a href="{% url 'postgis_app:flood' %}">Flood Maps</a></li>
+  <li class="{% if request.path == home_url %}active{% endif %}"><a href="{{ home_url }}">Provo Addresses</a></li>
+  <li class="{% if request.path == flood_url %}active{% endif %}"><a href="{{ flood_url }}">Flood Maps</a></li>
   <li class="title">Flood Scenarios</li>
-  <li><a href="{% url 'postgis_app:flooded_addresses' 1 %}">Scenario 1</a></li>
-  <li><a href="{% url 'postgis_app:flooded_addresses' 2 %}">Scenario 2</a></li>
-  <li><a href="{% url 'postgis_app:flooded_addresses' 3 %}">Scenario 3</a></li>
-  <li><a href="{% url 'postgis_app:flooded_addresses' 4 %}">Scenario 4</a></li>
-  <li><a href="{% url 'postgis_app:flooded_addresses' 5 %}">Scenario 5</a></li>
-  <li><a href="{% url 'postgis_app:flooded_addresses' 6 %}">Scenario 6</a></li>
+  <li class="{% if request.path == flooded_sc1 %}active{% endif %}"><a href="{{ flooded_sc1 }}">Scenario 1</a></li>
+  <li class="{% if request.path == flooded_sc2 %}active{% endif %}"><a href="{{ flooded_sc2 }}">Scenario 2</a></li>
+  <li class="{% if request.path == flooded_sc3 %}active{% endif %}"><a href="{{ flooded_sc3 }}">Scenario 3</a></li>
+  <li class="{% if request.path == flooded_sc4 %}active{% endif %}"><a href="{{ flooded_sc4 }}">Scenario 4</a></li>
+  <li class="{% if request.path == flooded_sc5 %}active{% endif %}"><a href="{{ flooded_sc5 }}">Scenario 5</a></li>
+  <li class="{% if request.path == flooded_sc6 %}active{% endif %}"><a href="{{ flooded_sc6 }}">Scenario 6</a></li>
 {% endblock %}
 
 {% block app_content %}

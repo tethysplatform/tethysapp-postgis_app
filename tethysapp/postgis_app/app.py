@@ -1,5 +1,6 @@
 from tethys_sdk.base import TethysAppBase, url_map_maker
-from tethys_sdk.stores import PersistentStore
+from tethys_sdk.app_settings import PersistentStoreDatabaseSetting
+
 
 class PostgisApp(TethysAppBase):
     """
@@ -12,9 +13,10 @@ class PostgisApp(TethysAppBase):
     package = 'postgis_app'
     root_url = 'postgis-app'
     color = '#e74c3c'
+    description = ''
+    tags = []
     enable_feedback = False
     feedback_emails = []
-    tags = []
         
     def url_maps(self):
         """
@@ -30,26 +32,24 @@ class PostgisApp(TethysAppBase):
                    url='postgis-app/flood',
                    controller='postgis_app.controllers.flood'),
             UrlMap(name='flooded_addresses',
-                   url='postgis-app/flooded-addresses/{id}',
+                   url='postgis-app/flooded-addresses/{url_id}',
                    controller='postgis_app.controllers.flooded_addresses'),
             UrlMap(name='list',
-                   url='postgis-app/flooded-addresses/{id}/list',
-                   controller='postgis_app.controllers.list'),
+                   url='postgis-app/flooded-addresses/{url_id}/list',
+                   controller='postgis_app.controllers.list_flooded_addresses'),
         )
 
         return url_maps
 
-    def persistent_stores(self):
-        """
-        Add one or more persistent_stores.
-        """
-        # Create a new persistent store (database)
-        stores = (
-            PersistentStore(
+    def persistent_store_settings(self):
+        ps_settings = (
+            PersistentStoreDatabaseSetting(
                 name='flooded_addresses',
-                initializer='postgis_app.init_stores.init_flooded_addresses_db',
-                spatial=True
+                description='PostGIS database',
+                initializer='postgis_app.model.init_flooded_addresses_db',
+                spatial=True,
+                required=True
             ),
         )
 
-        return stores
+        return ps_settings
