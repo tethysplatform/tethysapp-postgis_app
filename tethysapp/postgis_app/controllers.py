@@ -253,7 +253,7 @@ def flooded_addresses(request, url_id):
     return render(request, 'postgis_app/flood.html', context)
 
 
-@controller(url='flooded-addresses/{url_id}/list')
+@controller(name='list', url='flooded-addresses/{url_id}/list')
 def list_flooded_addresses(request, url_id):
     """
     Controller for listing flooded Addresses
