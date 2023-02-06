@@ -1,11 +1,13 @@
 import json
 from django.shortcuts import render
 from tethys_sdk.gizmos import *
+from tethys_sdk.routing import controller
 from .model import AddressPoint, FloodExtent
 
 from tethysapp.postgis_app.app import PostgisApp as app
 
 
+@controller
 def home(request):
     """
     Controller for the app home page.
@@ -61,7 +63,7 @@ def home(request):
         width='100%',
         controls=[{'MousePosition': {'projection': 'EPSG:4326'}}],
         layers=[address_points_layer],
-        basemap='OpenStreetMap',
+        basemap=['OpenStreetMap'],
         view=initial_view,
         legend=True
     )
@@ -74,6 +76,7 @@ def home(request):
     return render(request, 'postgis_app/home.html', context)
 
 
+@controller
 def flood(request):
     """
     Controller for flood page
@@ -128,7 +131,7 @@ def flood(request):
         width='100%',
         controls=[{'MousePosition': {'projection': 'EPSG:4326'}}],
         layers=layers,
-        basemap='OpenStreetMap',
+        basemap=['OpenStreetMap'],
         view=initial_view,
         legend=True
     )
@@ -141,6 +144,7 @@ def flood(request):
     return render(request, 'postgis_app/flood.html', context)
 
 
+@controller(url='flooded-addresses/{url_id}')
 def flooded_addresses(request, url_id):
     """
     Controller for flooded address page
@@ -233,7 +237,7 @@ def flooded_addresses(request, url_id):
         height='100%',
         width='100%',
         layers=[flooded_addresses_layer, flood_extent_layer],
-        basemap='OpenStreetMap',
+        basemap=['OpenStreetMap'],
         view=initial_view,
         legend=True
     )
@@ -249,6 +253,7 @@ def flooded_addresses(request, url_id):
     return render(request, 'postgis_app/flood.html', context)
 
 
+@controller(name='list', url='flooded-addresses/{url_id}/list')
 def list_flooded_addresses(request, url_id):
     """
     Controller for listing flooded Addresses
